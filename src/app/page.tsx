@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
+
+const MapView = dynamic(() => import('./components/MapView'), {
+  ssr: false,
+  loading: () => <div className="w-full h-full bg-slate-900 animate-pulse rounded-2xl flex items-center justify-center font-bold text-slate-500 uppercase tracking-widest text-xs">Initialising Map...</div>
+});
 
 interface Detection {
   data: string;
@@ -20,8 +26,8 @@ interface ApiResponse {
 export default function Home() {
   const [data, setData] = useState<ApiResponse>({ latest: null, history: [] });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null);
 
   const lastTimestamp = useRef<number>(0);
 
@@ -31,7 +37,6 @@ export default function Home() {
       if (response.ok) {
         const result: ApiResponse = await response.json();
         setData(result);
-        setError(null);
 
         if (result.latest) {
           setIsLive(true);
@@ -52,10 +57,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchLatestData();
-
-    // Poll for new frames every 500ms for a more "live" feel
     const interval = setInterval(fetchLatestData, 500);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -64,188 +66,215 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0a0a0c] text-slate-200 font-sans selection:bg-blue-500/30">
+    <main className="min-h-screen bg-[#08080a] text-slate-200 font-sans selection:bg-blue-600/30 overflow-x-hidden">
       {/* Background decoration */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600 blur-[120px] rounded-full"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600 blur-[120px] rounded-full"></div>
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[20%] right-[-10%] w-[50%] h-[50%] bg-blue-900/10 blur-[120px] rounded-full"></div>
+        <div className="absolute bottom-[20%] left-[-10%] w-[50%] h-[50%] bg-blue-600/5 blur-[120px] rounded-full"></div>
       </div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+      <div className="relative z-10 w-full max-w-[1400px] mx-auto px-4 py-6 md:px-8 md:py-8 layout-container">
+
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500 text-white uppercase tracking-wider">System Active</span>
-              <h2 className="text-slate-500 text-sm font-medium tracking-widest uppercase">Autonomous Monitor</h2>
+        <header className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8 items-center bg-slate-900/40 p-4 md:p-6 rounded-3xl border border-slate-800/60 backdrop-blur-md w-full min-w-0">
+          <div className="flex flex-col gap-1 min-w-0 w-full">
+            <h1 className="text-blue-500 text-xs font-black uppercase tracking-widest mb-1 px-1 truncate">Identifier</h1>
+            <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex items-center justify-between shadow-inner w-full min-w-0">
+              <span className="text-white font-black tracking-tight text-lg truncate">HUMAN_RECOG_01</span>
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0 ml-2"></div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
-              SIGHT <span className="font-light">OS</span>
-            </h1>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="bg-slate-900/50 backdrop-blur-md border border-slate-800 p-3 px-6 rounded-2xl shadow-xl flex items-center gap-4">
-              <div className="flex flex-col">
-                <span className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter">Status</span>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${isLive ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                  <span className={`text-xs font-bold ${isLive ? 'text-green-400' : 'text-red-400'}`}>
-                    {isLive ? 'LIVE' : 'OFFLINE'}
-                  </span>
-                </div>
+          <div className="flex flex-col md:items-center min-w-0">
+            <span className="text-slate-500 text-xs font-black uppercase tracking-widest mb-3 text-left md:text-center truncate">Overview</span>
+            <div className="flex gap-2 flex-wrap">
+              <div className="bg-blue-600 px-3 py-1.5 rounded-full text-white text-[10px] md:text-xs font-black uppercase shadow-lg shadow-blue-600/20 tracking-wider">Active</div>
+              <div className="bg-slate-800 px-3 py-1.5 rounded-full text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-wider border border-white/5">Secure</div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1 min-w-0 md:items-end">
+            <h1 className="text-blue-500 text-xs font-black uppercase tracking-widest mb-1 px-1">Metrics Lock</h1>
+            <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex justify-between items-center w-full md:w-auto min-w-0 gap-4 shadow-inner">
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LAT</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(8) || '0.00000000'}</span>
+              </div>
+              <div className="w-px h-6 bg-slate-800"></div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LNG</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(8) || '0.00000000'}</span>
               </div>
             </div>
           </div>
         </header>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
-            <p className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter mb-1">Detections</p>
-            <p className="text-2xl font-black text-white">{data.latest?.detections || 0}</p>
-          </div>
-          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
-            <p className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter mb-1">Latency</p>
-            <p className="text-2xl font-black text-blue-400 font-mono">14<span className="text-xs">ms</span></p>
-          </div>
-          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
-            <p className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter mb-1">Last Update</p>
-            <p className="text-2xl font-black text-white font-mono">{data.latest ? formatTime(data.latest.timestamp) : '--:--'}</p>
-          </div>
-          <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 backdrop-blur-sm">
-            <p className="text-slate-500 text-[10px] uppercase font-bold tracking-tighter mb-1">Location Lock</p>
-            <p className="text-2xl font-black text-green-400 uppercase text-sm mt-1">Stable</p>
-          </div>
-        </div>
+        {/* Main Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 md:gap-8 mb-8 items-start w-full min-w-0">
 
-        {/* Main Feed Section */}
-        <div className="mb-12">
-          <div className="relative group rounded-[2.5rem] overflow-hidden bg-slate-900 border border-slate-800 shadow-2xl transition-all duration-500 hover:border-blue-500/30">
-            {/* Overlay elements */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10 opacity-60"></div>
+          {/* Left Column (Video & Map) */}
+          <div className="lg:col-span-3 space-y-6 w-full min-w-0 flex flex-col">
 
-            <div className="absolute top-6 left-6 z-20 flex flex-col gap-2">
-              <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-[10px] font-bold tracking-widest text-white/90">REC NODE_01</span>
-              </div>
-            </div>
+            {/* Camera Feed */}
+            <div className="relative w-full aspect-video rounded-3xl overflow-hidden bg-black ring-1 ring-white/10 shadow-2xl flex-shrink-0">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-10 pointer-events-none"></div>
 
-            <div className="absolute bottom-8 left-8 z-20">
-              <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-[0.2em]">Live Stream Source</span>
-                <p className="text-white font-medium text-lg tracking-tight">Vinee Secure Peripheral_01</p>
-              </div>
-            </div>
-
-            <div className="absolute bottom-8 right-8 z-30 flex gap-2">
-              <div className="px-4 py-3 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-center min-w-[100px]">
-                <p className="text-[10px] text-white/60 uppercase font-bold tracking-tighter">LATITUDE</p>
-                <p className="text-sm font-mono text-white">{data.latest?.location?.lat?.toFixed(4) || '0.0000'}</p>
-              </div>
-              <div className="px-4 py-3 bg-black/60 backdrop-blur-md rounded-2xl border border-white/10 text-center min-w-[100px]">
-                <p className="text-[10px] text-white/60 uppercase font-bold tracking-tighter">LONGITUDE</p>
-                <p className="text-sm font-mono text-white">{data.latest?.location?.lng?.toFixed(4) || '0.0000'}</p>
-              </div>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="aspect-video w-full flex items-center justify-center bg-[#0d0d0e]">
-              {loading && !data.latest ? (
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin"></div>
-                  <p className="text-slate-500 text-sm font-medium animate-pulse uppercase tracking-[0.2em]">Initializing Feed...</p>
+              {/* HUD Elements */}
+              <div className="absolute top-4 left-4 md:top-6 md:left-6 z-20 flex gap-2">
+                <div className="bg-black/70 backdrop-blur-xl border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm flex items-center gap-2 shadow-lg">
+                  <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
+                  <span className="font-black text-white uppercase tracking-widest">LIVE</span>
                 </div>
-              ) : !isLive ? (
-                <div className="text-center p-12">
-                  <div className="w-20 h-20 bg-red-500/10 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
-                    <svg className="w-10 h-10 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </div>
-                  <p className="text-white font-bold text-xl mb-1 tracking-tight">Signal Connection Lost</p>
-                  <p className="text-slate-500 text-sm max-w-xs mx-auto">Please ensure the remote sender is active and broadcasting to the SIGHT gateway.</p>
+              </div>
+
+              <div className="absolute bottom-6 left-6 md:bottom-8 md:left-8 z-20 max-w-[80%] min-w-0">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <span className="text-[10px] md:text-xs font-black text-blue-500 uppercase tracking-widest leading-none truncate">Sensor_01</span>
+                  <h2 className="text-white text-xl md:text-2xl lg:text-3xl font-black tracking-tight truncate w-full">PERIMETER_DRONE</h2>
                 </div>
-              ) : (
+              </div>
+
+              {data.latest?.data ? (
                 <img
-                  src={data.latest?.data}
-                  alt="AI Stream"
+                  src={data.latest.data}
                   className="w-full h-full object-contain"
+                  alt="Live Stream"
                 />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+                  <div className="w-12 h-12 md:w-16 md:h-16 border-t-2 border-blue-600 rounded-full animate-spin"></div>
+                  <p className="text-xs font-black text-slate-700 uppercase tracking-widest text-center mt-2 px-4">Establishing Uplink...</p>
+                </div>
               )}
             </div>
-          </div>
-        </div>
 
-        {/* History Section */}
-        <section>
-          <div className="flex items-center justify-between mb-8 border-b border-slate-800 pb-4">
-            <div className="flex items-center gap-4">
-              <h2 className="text-2xl font-bold text-white tracking-tight">Detection Archive</h2>
-              <span className="bg-blue-600/20 text-blue-400 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-blue-500/20">Live Event Log</span>
+            {/* Map Feed */}
+            <div className="w-full h-[300px] md:h-[400px] rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl relative ring-1 ring-white/5 flex-shrink-0">
+              <MapView
+                lat={data.latest?.location?.lat || 12.971598765432}
+                lng={data.latest?.location?.lng || 77.594567890123}
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6 text-center">
-            {data.history.length === 0 ? (
-              <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-[2rem] border border-dashed border-slate-800 transition-colors hover:bg-slate-900/30">
-                <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                  </svg>
-                </div>
-                <p className="text-slate-500 font-medium italic">Detection database is currently empty.</p>
-                <p className="text-slate-600 text-xs mt-2 font-mono">WAITING_FOR_DATA_PACKET</p>
+          {/* Right Column (Sidebar Logs & Stats) */}
+          <div className="lg:col-span-1 flex flex-col gap-6 w-full min-w-0 lg:h-full">
+
+            {/* Logs Window */}
+            <div className="bg-slate-900/40 border border-slate-800 p-5 md:p-6 rounded-3xl backdrop-blur-md flex flex-col w-full min-w-0 shadow-xl max-h-[500px] lg:flex-1 lg:max-h-none">
+              <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
+                <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest truncate">Registry</h3>
+                <span className="bg-blue-600 px-2.5 py-1 rounded-md text-[10px] text-white font-black uppercase flex-shrink-0 ml-2">Log</span>
               </div>
-            ) : (
-              data.history.map((detection, idx) => (
-                <div
-                  key={detection.timestamp + idx}
-                  className="group bg-slate-900/60 border border-slate-800 rounded-3xl overflow-hidden shadow-lg transition-all duration-300 hover:-translate-y-2 hover:border-blue-500/50 hover:shadow-blue-500/10"
-                >
-                  <div className="aspect-[4/3] w-full relative">
-                    <img
-                      src={detection.data}
-                      alt={`Detection at ${detection.timestamp}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-3 right-3 px-2 py-1 bg-green-500/90 backdrop-blur-md text-white text-[9px] font-black rounded-lg uppercase shadow-lg">
-                      {detection.detections} {detection.detections > 1 ? 'Humans' : 'Human'}
-                    </div>
+
+              <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
+                {data.history.length === 0 ? (
+                  <div className="py-12 text-center opacity-30 flex flex-col items-center gap-3 my-auto">
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-500">Zero_Entries</p>
                   </div>
-                  <div className="p-5 text-left">
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-white font-bold text-sm tracking-tight">{formatTime(detection.timestamp)}</span>
-                      <span className="text-slate-600 font-mono text-[9px] bg-white/5 px-2 py-0.5 rounded-full">#LOG_{idx.toString().padStart(2, '0')}</span>
-                    </div>
-                    <div className="space-y-1 bg-black/30 p-2 rounded-xl border border-white/5">
-                      <div className="flex items-center gap-1.5 text-slate-400">
-                        <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        </svg>
-                        <span className="text-[10px] font-mono text-slate-300">
-                          {detection.location.lat.toFixed(4)}, {detection.location.lng.toFixed(4)}
-                        </span>
+                ) : (
+                  data.history.map((det, idx) => (
+                    <div
+                      key={det.timestamp + idx}
+                      onClick={() => setSelectedDetection(det)}
+                      className={`group cursor-pointer p-3 rounded-2xl border transition-all duration-200 flex gap-3 bg-black/50 overflow-hidden w-full ${selectedDetection === det ? 'border-blue-600 bg-blue-600/10 shadow-lg scale-[1.01]' : 'border-white/5 hover:border-slate-600'}`}
+                    >
+                      <div className="w-20 md:w-24 aspect-video rounded-xl overflow-hidden bg-slate-800 flex-shrink-0">
+                        <img src={det.data} className="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all" alt="" />
+                      </div>
+                      <div className="flex flex-col justify-center gap-1 min-w-0 flex-1">
+                        <span className="text-white font-black text-xs tracking-tight truncate">{formatTime(det.timestamp)}</span>
+                        <div className="flex flex-col text-[10px] text-slate-500 font-mono">
+                          <span className="truncate">L:{det.location.lat.toFixed(4)}</span>
+                          <span className="truncate">O:{det.location.lng.toFixed(4)}</span>
+                        </div>
                       </div>
                     </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Metrics Widget */}
+            <div className="bg-blue-900/10 border border-blue-500/20 p-6 md:p-8 rounded-3xl relative overflow-hidden group shadow-xl flex-shrink-0 w-full min-w-0">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 blur-3xl rounded-full translate-x-10 -translate-y-10 group-hover:scale-110 transition-transform"></div>
+              <h3 className="text-blue-500 text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 truncate">Uplink Telemetry</h3>
+              <div className="flex items-end gap-2 text-white">
+                <span className="text-4xl md:text-5xl font-black tracking-tighter italic">0.5</span>
+                <span className="text-xs md:text-sm font-black text-slate-500 mb-2 uppercase tracking-wider">Hz_Pulse</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Selected Data (Expanding View) */}
+        {selectedDetection && (
+          <section className="mt-8 md:mt-12 bg-slate-900 ring-1 ring-white/10 rounded-3xl md:rounded-[3rem] p-6 md:p-10 shadow-2xl animate-in fade-in slide-in-from-bottom-5 duration-500 relative overflow-hidden w-full min-w-0">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600/0 via-blue-600 to-blue-600/0"></div>
+
+            <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 min-w-0 w-full">
+              <div className="lg:w-2/3 w-full aspect-video rounded-3xl overflow-hidden bg-black shadow-xl relative border border-white/5 flex-shrink-0">
+                <img
+                  src={selectedDetection.data}
+                  className="w-full h-full object-contain"
+                  alt="Detailed View"
+                />
+                <div className="absolute top-4 left-4 md:top-6 md:left-6 z-20 bg-blue-600 px-4 py-1.5 md:px-6 md:py-2 rounded-full text-white text-[10px] md:text-xs font-black uppercase tracking-widest shadow-lg">
+                  Artifact
+                </div>
+              </div>
+
+              <div className="lg:w-1/3 w-full space-y-6 md:space-y-8 flex flex-col justify-center min-w-0">
+                <div className="min-w-0">
+                  <span className="text-blue-500 text-[10px] md:text-xs font-black uppercase tracking-widest mb-2 block truncate">Sensor Lock</span>
+                  <h2 className="text-white text-2xl md:text-3xl font-black tracking-tight leading-none mb-4 truncate">Historical Match</h2>
+                  <p className="text-slate-500 text-xs md:text-sm leading-relaxed font-medium line-clamp-3">Sub-millimeter precision lock verified. Artifact saved with complete spatial coordinates.</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 min-w-0 w-full">
+                  <div className="bg-black/40 p-4 md:p-5 rounded-2xl border border-white/5 shadow-inner w-full min-w-0">
+                    <span className="text-[10px] text-slate-500 uppercase font-black mb-2 block tracking-widest text-center truncate">Latitude</span>
+                    <div className="text-blue-400 font-mono text-center p-2 bg-white/5 rounded-xl border border-white/5 tracking-tighter text-[10px] md:text-xs truncate w-full">
+                      {selectedDetection.location.lat.toFixed(10)}
+                    </div>
+                  </div>
+                  <div className="bg-black/40 p-4 md:p-5 rounded-2xl border border-white/5 shadow-inner w-full min-w-0">
+                    <span className="text-[10px] text-slate-500 uppercase font-black mb-2 block tracking-widest text-center truncate">Longitude</span>
+                    <div className="text-blue-400 font-mono text-center p-2 bg-white/5 rounded-xl border border-white/5 tracking-tighter text-[10px] md:text-xs truncate w-full">
+                      {selectedDetection.location.lng.toFixed(10)}
+                    </div>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </section>
+
+                <button
+                  onClick={() => setSelectedDetection(null)}
+                  className="w-full bg-slate-800 hover:bg-blue-600 text-white p-4 md:p-5 rounded-2xl font-black uppercase text-xs tracking-widest transition-all border border-white/5 shadow-lg group truncate"
+                >
+                  Close Analysis
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Footer */}
-        <footer className="mt-20 pt-8 border-t border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-600 text-[10px] font-bold uppercase tracking-widest">
-          <p>© 2024 VINEE SECURE-CORE PROTOTYPE</p>
-          <div className="flex gap-6">
-            <span className="hover:text-blue-500 transition-colors cursor-pointer">Protocol Alpha</span>
-            <span className="hover:text-blue-500 transition-colors cursor-pointer">Security Sandbox</span>
-            <span className="hover:text-blue-500 transition-colors cursor-pointer">API Integration</span>
+        <footer className="mt-16 pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-700 w-full min-w-0">
+          <p className="truncate">© 2024 VINEE_CORE</p>
+          <div className="flex flex-wrap justify-center gap-4 md:gap-8">
+            <span className="text-blue-500 cursor-pointer hover:text-white transition-colors">Neural_Link</span>
+            <span className="cursor-pointer hover:text-white transition-colors">Vault</span>
           </div>
         </footer>
       </div>
+
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.4); border-radius: 4px; }
+      `}</style>
     </main>
   );
 }
