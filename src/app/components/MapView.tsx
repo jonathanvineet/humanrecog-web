@@ -26,7 +26,8 @@ function ChangeView({ center }: { center: [number, number] }) {
 }
 
 export default function MapView({ lat, lng }: MapProps) {
-    const center: [number, number] = [lat, lng];
+    // Use 2 decimals (approx 1.1km precision) for the map center to prevent micro-jitter
+    const center: [number, number] = [parseFloat(lat.toFixed(2)), parseFloat(lng.toFixed(2))];
 
     return (
         <div className="w-full h-full rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-0">
@@ -59,11 +60,11 @@ export default function MapView({ lat, lng }: MapProps) {
                 <div className="flex gap-4">
                     <div className="flex flex-col items-end">
                         <span className="text-[8px] text-slate-500 uppercase font-bold">LATITUDE</span>
-                        <span className="text-xs font-mono text-white">{lat.toFixed(7)}</span>
+                        <span className="text-xs font-mono text-white">{lat.toFixed(10)}</span>
                     </div>
                     <div className="flex flex-col items-end">
                         <span className="text-[8px] text-slate-500 uppercase font-bold">LONGITUDE</span>
-                        <span className="text-xs font-mono text-white">{lng.toFixed(7)}</span>
+                        <span className="text-xs font-mono text-white">{lng.toFixed(10)}</span>
                     </div>
                 </div>
             </div>

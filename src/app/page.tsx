@@ -1,5 +1,7 @@
 'use client';
 
+import mqtt from 'mqtt';
+
 import { useEffect, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 
@@ -31,39 +33,68 @@ export default function Home() {
 
   const lastTimestamp = useRef<number>(0);
 
-  const fetchLatestData = async () => {
+  const fetchInitialData = async () => {
+    // Optionally fetch historical history, or just wait for the stream
     try {
       const response = await fetch('/api/upload-frame');
       if (response.ok) {
         const result: ApiResponse = await response.json();
-        setData(result);
-
-        if (result.latest) {
-          if (result.latest.timestamp > lastTimestamp.current) {
-            setData(result);
-            setIsLive(true);
-            lastTimestamp.current = result.latest.timestamp;
-          }
-        } else {
-          setData(result);
-          setIsLive(false);
-        }
-      } else {
-        setIsLive(false);
+        // Only set history, let MQTT handle the live stream
+        setData(prev => ({ ...prev, history: result.history }));
       }
-    } catch (err) {
-      console.error('Fetch error:', err);
-      setIsLive(false);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { }
   };
 
   useEffect(() => {
-    fetchLatestData();
-    // 33ms = 30Hz Polling for a true high-speed 30FPS experience
-    const interval = setInterval(fetchLatestData, 33);
-    return () => clearInterval(interval);
+    fetchInitialData();
+
+    // Connect to EMQX Public Broker securely over WebSockets
+    const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+      reconnectPeriod: 1000,
+    });
+
+    client.on('connect', () => {
+      console.log('🔗 MQTT Secure Tunnel Active');
+      client.subscribe('humanrecog/video/jonathan_feed');
+      setLoading(false);
+    });
+
+    client.on('message', (topic, message) => {
+      try {
+        const payload: Detection = JSON.parse(message.toString());
+
+        // MQTT guarantees delivery order per connection. No jumping!
+        setData(prev => {
+          let newHistory = prev.history;
+
+          // Add to history if a detection occurs and it's been at least 2 seconds since the last one
+          if (payload.detections > 0) {
+            const lastHistoryItem = newHistory[0];
+            const timeSinceLast = lastHistoryItem ? payload.timestamp - lastHistoryItem.timestamp : Infinity;
+            if (timeSinceLast > 2000) {
+              newHistory = [payload, ...newHistory].slice(0, 10);
+            }
+          }
+
+          return {
+            latest: payload,
+            history: newHistory
+          };
+        });
+
+        setIsLive(true);
+      } catch (e) {
+        console.error('MQTT Parsing error:', e);
+      }
+    });
+
+    client.on('offline', () => {
+      setIsLive(false);
+    });
+
+    return () => {
+      client.end();
+    };
   }, []);
 
   const formatTime = (ts: number) => {
@@ -103,12 +134,12 @@ export default function Home() {
             <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex justify-between items-center w-full md:w-auto min-w-0 gap-4 shadow-inner">
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LAT</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(7) || '0.0000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(10) || '0.0000000000'}</span>
               </div>
               <div className="w-px h-6 bg-slate-800"></div>
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LNG</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(7) || '0.0000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(10) || '0.0000000000'}</span>
               </div>
             </div>
           </div>
