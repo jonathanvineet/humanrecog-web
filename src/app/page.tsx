@@ -57,7 +57,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchLatestData();
-    const interval = setInterval(fetchLatestData, 500);
+    const interval = setInterval(fetchLatestData, 250);
     return () => clearInterval(interval);
   }, []);
 
