@@ -57,7 +57,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchLatestData();
-    const interval = setInterval(fetchLatestData, 250);
+    // 33ms = 30Hz Polling for a true high-speed 30FPS experience
+    const interval = setInterval(fetchLatestData, 33);
     return () => clearInterval(interval);
   }, []);
 
@@ -98,12 +99,12 @@ export default function Home() {
             <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex justify-between items-center w-full md:w-auto min-w-0 gap-4 shadow-inner">
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LAT</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(8) || '0.00000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(10) || '0.0000000000'}</span>
               </div>
               <div className="w-px h-6 bg-slate-800"></div>
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LNG</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(8) || '0.00000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(10) || '0.0000000000'}</span>
               </div>
             </div>
           </div>
