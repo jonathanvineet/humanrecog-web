@@ -20,83 +20,84 @@ interface Detection {
   };
 }
 
-interface ApiResponse {
-  latest: Detection | null;
-  history: Detection[];
-}
+interface DetectionMeta extends Omit<Detection, 'data'> { }
 
 export default function Home() {
-  const [data, setData] = useState<ApiResponse>({ latest: null, history: [] });
+  const [latestMeta, setLatestMeta] = useState<DetectionMeta | null>(null);
+  const [history, setHistory] = useState<Detection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isLive, setIsLive] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'live' | 'disconnected'>('connecting');
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null);
 
+  const imgRef = useRef<HTMLImageElement>(null);
   const lastTimestamp = useRef<number>(0);
 
   const fetchInitialData = async () => {
-    // Optionally fetch historical history, or just wait for the stream
-    try {
-      const response = await fetch('/api/upload-frame');
-      if (response.ok) {
-        const result: ApiResponse = await response.json();
-        // Only set history, let MQTT handle the live stream
-        setData(prev => ({ ...prev, history: result.history }));
-      }
-    } catch (e) { }
+    // Optionally fetch initial state if needed
   };
 
   useEffect(() => {
     fetchInitialData();
 
     // Connect to EMQX Public Broker securely over WebSockets
+    setConnectionStatus('connecting');
     const client = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
       reconnectPeriod: 1000,
     });
 
     client.on('connect', () => {
       console.log('🔗 MQTT Secure Tunnel Active');
-      client.subscribe('humanrecog/video/jonathan_feed');
+      client.subscribe('humanrecog/video/jonathan_feed', { qos: 0 });
       setLoading(false);
+      setConnectionStatus('live');
     });
 
     client.on('message', (topic, message) => {
       try {
         const rawPayload = JSON.parse(message.toString());
-        const payload: Detection = {
-          data: rawPayload.frameData || rawPayload.data,
-          timestamp: rawPayload.timestamp,
-          detections: rawPayload.detections,
-          location: rawPayload.location
+        const frameData = rawPayload.frameData || rawPayload.data;
+        const metadata: DetectionMeta = {
+          timestamp: rawPayload.timestamp || Date.now(),
+          detections: rawPayload.detections || 0,
+          location: rawPayload.location || { lat: 12.9716, lng: 77.5946 }
         };
 
-        // MQTT guarantees delivery order per connection. No jumping!
-        setData(prev => {
-          let newHistory = prev.history;
+        // DOM Update directly via Ref (no React re-render lag)
+        if (imgRef.current && frameData) {
+          requestAnimationFrame(() => {
+            imgRef.current!.src = frameData;
+          });
+        }
 
-          // Add to history if a detection occurs and it's been at least 2 seconds since the last one
-          if (payload.detections > 0) {
-            const lastHistoryItem = newHistory[0];
-            const timeSinceLast = lastHistoryItem ? payload.timestamp - lastHistoryItem.timestamp : Infinity;
+        setLatestMeta(metadata);
+
+        // Add to history if a detection occurs and it's been at least 2 seconds since the last one
+        if (metadata.detections > 0) {
+          setHistory(prev => {
+            const lastHistoryItem = prev[0];
+            const timeSinceLast = lastHistoryItem ? metadata.timestamp - lastHistoryItem.timestamp : Infinity;
             if (timeSinceLast > 2000) {
-              newHistory = [payload, ...newHistory].slice(0, 10);
+              // Fire and forget: post detection history to the backend
+              fetch('/api/upload-frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(metadata)
+              }).catch(err => console.error('Failed to save to backend', err));
+
+              return [{ ...metadata, data: frameData }, ...prev].slice(0, 10);
             }
-          }
+            return prev;
+          });
+        }
 
-          return {
-            latest: payload,
-            history: newHistory
-          };
-        });
-
-        setIsLive(true);
       } catch (e) {
         console.error('MQTT Parsing error:', e);
       }
     });
 
-    client.on('offline', () => {
-      setIsLive(false);
-    });
+    client.on('offline', () => setConnectionStatus('disconnected'));
+    client.on('close', () => setConnectionStatus('disconnected'));
+    client.on('reconnect', () => setConnectionStatus('connecting'));
 
     return () => {
       client.end();
@@ -140,12 +141,12 @@ export default function Home() {
             <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex justify-between items-center w-full md:w-auto min-w-0 gap-4 shadow-inner">
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LAT</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(10) || '0.0000000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{latestMeta?.location?.lat?.toFixed(10) || '0.0000000000'}</span>
               </div>
               <div className="w-px h-6 bg-slate-800"></div>
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LNG</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(10) || '0.0000000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{latestMeta?.location?.lng?.toFixed(10) || '0.0000000000'}</span>
               </div>
             </div>
           </div>
@@ -163,10 +164,15 @@ export default function Home() {
 
               {/* HUD Elements */}
               <div className="absolute top-4 left-4 md:top-6 md:left-6 z-20 flex gap-2">
-                <div className="bg-black/70 backdrop-blur-xl border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm flex items-center gap-2 shadow-lg">
-                  <div className="w-2 h-2 rounded-full bg-red-600 animate-pulse"></div>
-                  <span className="font-black text-white uppercase tracking-widest">LIVE</span>
+                <div className={`bg-black/70 backdrop-blur-xl border px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm flex items-center gap-2 shadow-lg ${connectionStatus === 'live' ? 'border-green-500/50' : connectionStatus === 'connecting' ? 'border-yellow-500/50' : 'border-red-500/50'}`}>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${connectionStatus === 'live' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+                  <span className="font-black text-white uppercase tracking-widest">{connectionStatus}</span>
                 </div>
+                {latestMeta && latestMeta.detections > 0 && (
+                  <div className="bg-red-600/90 backdrop-blur-xl border border-red-500 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs md:text-sm flex items-center gap-2 shadow-lg">
+                    <span className="font-black text-white uppercase tracking-widest">Detections: {latestMeta.detections}</span>
+                  </div>
+                )}
               </div>
 
               <div className="absolute bottom-6 left-6 md:bottom-8 md:left-8 z-20 max-w-[80%] min-w-0">
@@ -176,14 +182,14 @@ export default function Home() {
                 </div>
               </div>
 
-              {data.latest?.data ? (
-                <img
-                  src={data.latest.data}
-                  className="w-full h-full object-contain"
-                  alt="Live Stream"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+              <img
+                ref={imgRef}
+                className={`w-full h-full object-contain ${loading ? 'opacity-0' : 'opacity-100'}`}
+                alt="Live Stream"
+              />
+
+              {loading && (
+                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black">
                   <div className="w-12 h-12 md:w-16 md:h-16 border-t-2 border-blue-600 rounded-full animate-spin"></div>
                   <p className="text-xs font-black text-slate-700 uppercase tracking-widest text-center mt-2 px-4">Establishing Uplink...</p>
                 </div>
@@ -193,8 +199,8 @@ export default function Home() {
             {/* Map Feed */}
             <div className="w-full h-[300px] md:h-[400px] rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 shadow-xl relative ring-1 ring-white/5 flex-shrink-0">
               <MapView
-                lat={data.latest?.location?.lat || 12.971598765432}
-                lng={data.latest?.location?.lng || 77.594567890123}
+                lat={latestMeta?.location?.lat || 12.971598765432}
+                lng={latestMeta?.location?.lng || 77.594567890123}
               />
             </div>
           </div>
@@ -210,12 +216,12 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
-                {data.history.length === 0 ? (
+                {history.length === 0 ? (
                   <div className="py-12 text-center opacity-30 flex flex-col items-center gap-3 my-auto">
                     <p className="text-xs font-black uppercase tracking-widest text-slate-500">Zero_Entries</p>
                   </div>
                 ) : (
-                  data.history.map((det, idx) => (
+                  history.map((det, idx) => (
                     <div
                       key={det.timestamp + idx}
                       onClick={() => setSelectedDetection(det)}
