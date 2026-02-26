@@ -39,9 +39,13 @@ export default function Home() {
         setData(result);
 
         if (result.latest) {
-          setIsLive(true);
-          lastTimestamp.current = result.latest.timestamp;
+          if (result.latest.timestamp > lastTimestamp.current) {
+            setData(result);
+            setIsLive(true);
+            lastTimestamp.current = result.latest.timestamp;
+          }
         } else {
+          setData(result);
           setIsLive(false);
         }
       } else {
@@ -99,12 +103,12 @@ export default function Home() {
             <div className="bg-black/50 border border-white/5 p-3 px-4 rounded-xl flex justify-between items-center w-full md:w-auto min-w-0 gap-4 shadow-inner">
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LAT</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(10) || '0.0000000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lat?.toFixed(7) || '0.0000000'}</span>
               </div>
               <div className="w-px h-6 bg-slate-800"></div>
               <div className="flex flex-col min-w-0">
                 <span className="text-[10px] text-slate-600 font-bold tracking-widest truncate">LNG</span>
-                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(10) || '0.0000000000'}</span>
+                <span className="text-white font-black text-xs md:text-sm font-mono truncate">{data.latest?.location?.lng?.toFixed(7) || '0.0000000'}</span>
               </div>
             </div>
           </div>

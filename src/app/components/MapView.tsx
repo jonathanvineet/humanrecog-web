@@ -59,11 +59,11 @@ export default function MapView({ lat, lng }: MapProps) {
                 <div className="flex gap-4">
                     <div className="flex flex-col items-end">
                         <span className="text-[8px] text-slate-500 uppercase font-bold">LATITUDE</span>
-                        <span className="text-xs font-mono text-white">{lat.toFixed(10)}</span>
+                        <span className="text-xs font-mono text-white">{lat.toFixed(7)}</span>
                     </div>
                     <div className="flex flex-col items-end">
                         <span className="text-[8px] text-slate-500 uppercase font-bold">LONGITUDE</span>
-                        <span className="text-xs font-mono text-white">{lng.toFixed(10)}</span>
+                        <span className="text-xs font-mono text-white">{lng.toFixed(7)}</span>
                     </div>
                 </div>
             </div>
