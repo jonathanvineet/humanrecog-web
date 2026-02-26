@@ -61,7 +61,13 @@ export default function Home() {
 
     client.on('message', (topic, message) => {
       try {
-        const payload: Detection = JSON.parse(message.toString());
+        const rawPayload = JSON.parse(message.toString());
+        const payload: Detection = {
+          data: rawPayload.frameData || rawPayload.data,
+          timestamp: rawPayload.timestamp,
+          detections: rawPayload.detections,
+          location: rawPayload.location
+        };
 
         // MQTT guarantees delivery order per connection. No jumping!
         setData(prev => {
