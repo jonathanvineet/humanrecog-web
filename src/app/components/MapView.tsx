@@ -1,73 +1,79 @@
 'use client';
 
-import { MapContainer, TileLayer, Marker, useMap, CircleMarker } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useEffect } from 'react';
 
-// Fix for default marker icons in Leaflet + React
-const icon = L.icon({
-    iconUrl: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // Modern pin icon
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-});
-
-interface MapProps {
+interface MapViewProps {
     lat: number;
     lng: number;
+    /** Called once on mount with a setter fn — lets parent update position without re-rendering */
+    onRegisterSetPosition?: (fn: (lat: number, lng: number) => void) => void;
 }
 
-function ChangeView({ center }: { center: [number, number] }) {
-    const map = useMap();
+export default function MapView({ lat, lng, onRegisterSetPosition }: MapViewProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<L.Map | null>(null);
+    const markerRef = useRef<L.CircleMarker | null>(null);
+    const ringRef = useRef<L.CircleMarker | null>(null);
+
     useEffect(() => {
-        map.setView(center, map.getZoom());
-    }, [center, map]);
-    return null;
-}
+        if (!containerRef.current || mapRef.current) return;
 
-export default function MapView({ lat, lng }: MapProps) {
-    // Use 2 decimals (approx 1.1km precision) for the map center to prevent micro-jitter
-    const center: [number, number] = [parseFloat(lat.toFixed(2)), parseFloat(lng.toFixed(2))];
+        // Use higher zoom for the initial lock
+        const map = L.map(containerRef.current, {
+            center: [lat, lng],
+            zoom: 17,
+            zoomControl: false,
+            attributionControl: false,
+        });
 
-    return (
-        <div className="w-full h-full rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-0">
-            <MapContainer
-                center={center}
-                zoom={18}
-                scrollWheelZoom={false}
-                className="w-full h-full grayscale-[0.5] invert-[0.9] hue-rotate-[200deg] brightness-[0.8]"
-            >
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-                <CircleMarker
-                    center={center}
-                    radius={8}
-                    pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 1 }}
-                />
-                <CircleMarker
-                    center={center}
-                    radius={20}
-                    pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.2 }}
-                />
-                <ChangeView center={center} />
-            </MapContainer>
+        // Dark sleek map style
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19,
+        }).addTo(map);
 
-            {/* Precision UI element */}
-            <div className="absolute top-4 right-4 z-[1000] bg-black/60 backdrop-blur-md border border-white/10 p-4 rounded-2xl flex flex-col gap-1 items-end shadow-xl">
-                <span className="text-[10px] uppercase font-black text-blue-500 tracking-[0.2em]">Live Precision Lock</span>
-                <div className="flex gap-4">
-                    <div className="flex flex-col items-end">
-                        <span className="text-[8px] text-slate-500 uppercase font-bold">LATITUDE</span>
-                        <span className="text-xs font-mono text-white">{lat.toFixed(10)}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[8px] text-slate-500 uppercase font-bold">LONGITUDE</span>
-                        <span className="text-xs font-mono text-white">{lng.toFixed(10)}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+        // Outer pulse ring
+        const ring = L.circleMarker([lat, lng], {
+            radius: 18,
+            color: '#3b82f6',
+            weight: 1.5,
+            opacity: 0.4,
+            fillOpacity: 0,
+        }).addTo(map);
+
+        // Inner dot
+        const marker = L.circleMarker([lat, lng], {
+            radius: 7,
+            color: '#3b82f6',
+            weight: 2,
+            opacity: 1,
+            fillColor: '#3b82f6',
+            fillOpacity: 0.9,
+        }).addTo(map);
+
+        mapRef.current = map;
+        markerRef.current = marker;
+        ringRef.current = ring;
+
+        // Register the imperative setter — parent calls this to move the marker
+        // without ever triggering a React re-render
+        if (onRegisterSetPosition) {
+            onRegisterSetPosition((newLat: number, newLng: number) => {
+                if (!mapRef.current || !markerRef.current || !ringRef.current) return;
+                const pos = L.latLng(newLat, newLng);
+                markerRef.current.setLatLng(pos);
+                ringRef.current.setLatLng(pos);
+                mapRef.current.setView(pos, mapRef.current.getZoom(), { animate: true, duration: 0.4 });
+            });
+        }
+
+        return () => {
+            map.remove();
+            mapRef.current = null;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    return <div ref={containerRef} className="w-full h-full rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative z-0" />;
 }
