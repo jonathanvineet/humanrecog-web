@@ -13,6 +13,8 @@ const MapView = dynamic(() => import('./components/MapView'), {
   ),
 });
 
+const RPI_LOCAL_SERVER = "http://localhost:5000"; // Adjust IP if running remotely
+
 interface Detection {
   data: string;
   timestamp: number;
@@ -53,9 +55,29 @@ export default function Home() {
   const lastFpsCalc = useRef<number>(Date.now());
 
   // ── rAF render loop: drains the frame queue at display refresh rate ─────────
-  // This decouples MQTT arrival rate from screen repaint — no frame is skipped,
-  // no frame blocks the next one.
+  const fetchInitialData = useCallback(async () => {
+    try {
+      // Prioritize Local RPi Storage for history bootstrap
+      const response = await fetch(`${RPI_LOCAL_SERVER}/detections`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.history) setHistory(result.history);
+      } else {
+        // Fallback to Vercel API if RPi local server is unreachable
+        const vResponse = await fetch('/api/upload-frame');
+        if (vResponse.ok) {
+          const result = await vResponse.json();
+          if (result.history) setHistory(result.history);
+        }
+      }
+    } catch (e) {
+      console.warn("Could not sync with local RPi server, using live stream only.");
+    }
+  }, []);
+
   useEffect(() => {
+    fetchInitialData();
+
     const loop = () => {
       if (frameQueue.current.length > 0) {
         // Always paint only the LATEST frame; drop stale intermediates
@@ -180,7 +202,7 @@ export default function Home() {
     client.on('reconnect', () => setStatus('connecting'));
 
     return () => { client.end(); };
-  }, [setStatus]);
+  }, [setStatus, fetchInitialData]);
 
   const formatTime = (ts: number) =>
     new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -289,8 +311,17 @@ export default function Home() {
             {/* Detection Log */}
             <div className="bg-slate-900/40 border border-slate-800 p-5 md:p-6 rounded-3xl backdrop-blur-md flex flex-col shadow-xl max-h-[500px] lg:flex-1 lg:max-h-none">
               <div className="flex items-center justify-between mb-6 border-b border-slate-800 pb-4">
-                <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest">Registry</h3>
-                <span className="bg-blue-600 px-2.5 py-1 rounded-md text-[10px] text-white font-black uppercase">Log</span>
+                <div className="flex flex-col">
+                  <h3 className="text-white font-black text-xs md:text-sm uppercase tracking-widest">Registry</h3>
+                  <span className="text-[8px] text-slate-500 font-bold uppercase mt-1">Local Storage Sync</span>
+                </div>
+                <button
+                  onClick={fetchInitialData}
+                  className="bg-blue-600 hover:bg-blue-500 px-2.5 py-1 rounded-md text-[10px] text-white font-black uppercase transition-colors flex items-center gap-1 shadow-lg shadow-blue-600/20"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Sync
+                </button>
               </div>
 
               <div className="flex flex-col gap-3 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
@@ -304,8 +335,8 @@ export default function Home() {
                       key={det.timestamp + idx}
                       onClick={() => setSelectedDetection(det)}
                       className={`group cursor-pointer p-3 rounded-2xl border transition-all duration-200 flex gap-3 bg-black/50 overflow-hidden ${selectedDetection === det
-                          ? 'border-blue-600 bg-blue-600/10 shadow-lg scale-[1.01]'
-                          : 'border-white/5 hover:border-slate-600'
+                        ? 'border-blue-600 bg-blue-600/10 shadow-lg scale-[1.01]'
+                        : 'border-white/5 hover:border-slate-600'
                         }`}
                     >
                       <div className="w-20 md:w-24 aspect-video rounded-xl overflow-hidden bg-slate-800 flex-shrink-0">
